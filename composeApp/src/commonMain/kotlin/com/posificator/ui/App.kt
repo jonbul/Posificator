@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -21,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -48,6 +50,14 @@ fun App(repository: PlaceRepository, platform: LocationPlatform) {
     val places by repository.places.collectAsState()
     val permissions by platform.permissions.collectAsState()
     var editing by remember { mutableStateOf<Place?>(null) }
+    var notificationsBlocked by remember { mutableStateOf(false) }
+
+    // Ask for notifications on every launch until they're allowed.
+    LaunchedEffect(platform) {
+        if (!platform.permissions.value.notificationsAllowed) {
+            notificationsBlocked = !platform.requestNotificationPermission()
+        }
+    }
 
     // Keep the OS geofences in step with the saved places and permission changes.
     LaunchedEffect(repository, platform) {
@@ -102,6 +112,21 @@ fun App(repository: PlaceRepository, platform: LocationPlatform) {
                     )
                 }
             }
+        }
+
+        if (notificationsBlocked && !permissions.notificationsAllowed) {
+            AlertDialog(
+                onDismissRequest = { notificationsBlocked = false },
+                title = { Text("Notifications are off") },
+                text = { Text("Posificator can't tell you when you arrive unless notifications are allowed. Turn them on in Settings.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        notificationsBlocked = false
+                        platform.openNotificationSettings()
+                    }) { Text("Open settings") }
+                },
+                dismissButton = { TextButton(onClick = { notificationsBlocked = false }) { Text("Not now") } },
+            )
         }
 
         editing?.let { place ->

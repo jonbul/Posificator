@@ -16,6 +16,7 @@ import com.posificator.platform.Coordinates
 import com.posificator.platform.LocationAccess
 import com.posificator.platform.LocationPlatform
 import com.posificator.platform.PermissionStatus
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,6 +42,15 @@ class AndroidLocationPlatform(private val activity: ComponentActivity) : Locatio
             refreshPermissions()
             // Android only lets apps ask for background location after foreground location is granted.
             if (activity.hasFineLocation() && !activity.hasBackgroundLocation()) requestPermissions()
+        }
+
+    private var notificationResult: CompletableDeferred<Boolean>? = null
+
+    private val notificationLauncher =
+        activity.registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+            refreshPermissions()
+            notificationResult?.complete(activity.notificationsAllowed())
+            notificationResult = null
         }
 
     private val singleLauncher =
@@ -88,6 +98,17 @@ class AndroidLocationPlatform(private val activity: ComponentActivity) : Locatio
         }
     }
 
+    override suspend fun requestNotificationPermission(): Boolean {
+        if (activity.notificationsAllowed()) return true
+        // Below Android 13 there is no prompt: notifications are only off if the user turned them off.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return false
+        val result = CompletableDeferred<Boolean>()
+        notificationResult = result
+        askedNotifications = true
+        notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        return result.await()
+    }
+
     override fun refreshPermissions() {
         _permissions.value = readPermissions()
     }
@@ -120,7 +141,7 @@ class AndroidLocationPlatform(private val activity: ComponentActivity) : Locatio
         )
     }
 
-    private fun openNotificationSettings() {
+    override fun openNotificationSettings() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             activity.startActivity(
                 Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName),

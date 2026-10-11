@@ -3,14 +3,17 @@ package com.posificator.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
@@ -21,7 +24,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,9 +41,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.posificator.model.Dates
 import com.posificator.model.Place
@@ -68,7 +72,9 @@ fun PlaceEditorScreen(
     var center by remember { mutableStateOf(if (isNew) null else Coordinates(initial.latitude, initial.longitude)) }
     var target by remember { mutableStateOf(center) }
     var targetVersion by remember { mutableIntStateOf(0) }
-    var radius by remember { mutableStateOf(initial.radiusMeters.toFloat()) }
+    var radiusText by remember { mutableStateOf(initial.radiusMeters.roundToInt().toString()) }
+    // The map keeps the last valid radius while the user is mid-edit.
+    var shownRadius by remember { mutableStateOf(initial.radiusMeters) }
     var locating by remember { mutableStateOf(false) }
     var locateError by remember { mutableStateOf<String?>(null) }
 
@@ -101,8 +107,9 @@ fun PlaceEditorScreen(
     // New places start at the user's position.
     LaunchedEffect(Unit) { if (isNew) locate() }
 
+    val radius = radiusText.trim().toDoubleOrNull()?.takeIf { it in Place.MIN_RADIUS_METERS..Place.MAX_RADIUS_METERS }
     val datesValid = !useDates || startDate <= endDate
-    val canSave = name.isNotBlank() && center != null && datesValid
+    val canSave = name.isNotBlank() && center != null && datesValid && radius != null
 
     Scaffold(
         topBar = {
@@ -119,7 +126,7 @@ fun PlaceEditorScreen(
                                     name = name.trim(),
                                     latitude = c.latitude,
                                     longitude = c.longitude,
-                                    radiusMeters = radius.toDouble(),
+                                    radiusMeters = radius ?: return@TextButton,
                                     startDate = if (useDates) startDate else null,
                                     endDate = if (useDates) endDate else null,
                                     startMinute = if (useHours) startMinute else null,
@@ -132,73 +139,112 @@ fun PlaceEditorScreen(
             )
         },
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
-            Box(Modifier.fillMaxWidth().height(320.dp)) {
-                PlaceMap(
-                    target = target,
-                    targetVersion = targetVersion,
-                    radiusMeters = radius.toDouble(),
-                    onCenterChange = { center = it },
-                    modifier = Modifier.fillMaxSize(),
-                )
-                CenterPin(Modifier.align(Alignment.Center))
+        BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
+            val landscape = maxWidth > maxHeight
+            // The map is rebuilt when the layout flips, so start it where the pin was.
+            LaunchedEffect(landscape) {
+                center?.let {
+                    target = it
+                    targetVersion++
+                }
             }
-
-            Column(
-                modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(
-                    center?.let { "Drag the map to move the pin · ${formatCoordinate(it.latitude)}, ${formatCoordinate(it.longitude)}" }
-                        ?: "Drag the map to put the pin on the place",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                OutlinedButton(enabled = !locating, onClick = ::locate) {
-                    Text(if (locating) "Locating…" else "Go to my current location")
+            val map: @Composable (Modifier) -> Unit = { modifier ->
+                Box(modifier.clipToBounds()) {
+                    PlaceMap(
+                        target = target,
+                        targetVersion = targetVersion,
+                        radiusMeters = shownRadius,
+                        onCenterChange = { center = it },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    CenterPin(Modifier.align(Alignment.Center))
                 }
-                locateError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Name") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                Text("Notify me within ${formatDistance(radius.toDouble())}")
-                Slider(
-                    value = radius,
-                    onValueChange = { radius = (it / 10f).roundToInt() * 10f },
-                    valueRange = Place.MIN_RADIUS_METERS.toFloat()..Place.MAX_RADIUS_METERS.toFloat(),
-                )
-
-                HorizontalDivider()
-                ToggleRow("Only between certain dates", useDates) { useDates = it }
-                if (useDates) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedButton(onClick = { picker = PickerTarget.StartDate }) { Text("From ${Dates.format(startDate)}") }
-                        OutlinedButton(onClick = { picker = PickerTarget.EndDate }) { Text("To ${Dates.format(endDate)}") }
+            }
+            val form: @Composable (Modifier) -> Unit = { modifier ->
+                Column(
+                    modifier = modifier.verticalScroll(rememberScrollState()).padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(
+                        center?.let { "Drag the map to move the pin · ${formatCoordinate(it.latitude)}, ${formatCoordinate(it.longitude)}" }
+                            ?: "Drag the map to put the pin on the place",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    OutlinedButton(enabled = !locating, onClick = ::locate) {
+                        Text(if (locating) "Locating…" else "Go to my current location")
                     }
-                    if (!datesValid) {
-                        Text("The end date is before the start date.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                    }
-                }
+                    locateError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
 
-                ToggleRow("Only between certain hours", useHours) { useHours = it }
-                if (useHours) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedButton(onClick = { picker = PickerTarget.StartTime }) { Text("From ${Dates.formatMinute(startMinute)}") }
-                        OutlinedButton(onClick = { picker = PickerTarget.EndTime }) { Text("To ${Dates.formatMinute(endMinute)}") }
-                    }
-                    if (startMinute > endMinute) {
-                        Text("Runs overnight, past midnight.", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
 
-                if (!isNew) {
+                    OutlinedTextField(
+                        value = radiusText,
+                        onValueChange = { text ->
+                            radiusText = text.filter { it.isDigit() }.take(6)
+                            radiusText.toDoubleOrNull()
+                                ?.takeIf { it in Place.MIN_RADIUS_METERS..Place.MAX_RADIUS_METERS }
+                                ?.let { shownRadius = it }
+                        },
+                        label = { Text("Radius in meters") },
+                        singleLine = true,
+                        isError = radius == null,
+                        supportingText = {
+                            Text(
+                                if (radius == null) {
+                                    "Enter ${Place.MIN_RADIUS_METERS.roundToInt()} to ${Place.MAX_RADIUS_METERS.roundToInt()} meters"
+                                } else {
+                                    "Notify me within ${formatDistance(radius)}"
+                                },
+                            )
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
                     HorizontalDivider()
-                    TextButton(onClick = onDelete) { Text("Delete place", color = MaterialTheme.colorScheme.error) }
+                    ToggleRow("Only between certain dates", useDates) { useDates = it }
+                    if (useDates) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedButton(onClick = { picker = PickerTarget.StartDate }) { Text("From ${Dates.format(startDate)}") }
+                            OutlinedButton(onClick = { picker = PickerTarget.EndDate }) { Text("To ${Dates.format(endDate)}") }
+                        }
+                        if (!datesValid) {
+                            Text("The end date is before the start date.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+
+                    ToggleRow("Only between certain hours", useHours) { useHours = it }
+                    if (useHours) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedButton(onClick = { picker = PickerTarget.StartTime }) { Text("From ${Dates.formatMinute(startMinute)}") }
+                            OutlinedButton(onClick = { picker = PickerTarget.EndTime }) { Text("To ${Dates.formatMinute(endMinute)}") }
+                        }
+                        if (startMinute > endMinute) {
+                            Text("Runs overnight, past midnight.", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+
+                    if (!isNew) {
+                        HorizontalDivider()
+                        TextButton(onClick = onDelete) { Text("Delete place", color = MaterialTheme.colorScheme.error) }
+                    }
+                }
+            }
+            if (landscape) {
+                Row(Modifier.fillMaxSize()) {
+                    map(Modifier.weight(1f).fillMaxHeight())
+                    form(Modifier.weight(1f).fillMaxHeight())
+                }
+            } else {
+                Column(Modifier.fillMaxSize()) {
+                    map(Modifier.fillMaxWidth().height(minOf(320.dp, maxHeight * 0.45f)))
+                    form(Modifier.weight(1f).fillMaxWidth())
                 }
             }
         }

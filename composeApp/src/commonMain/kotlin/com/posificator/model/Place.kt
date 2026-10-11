@@ -21,7 +21,7 @@ data class Place(
     companion object {
         /** Both platforms are unreliable below ~100 m, so the slider starts there. */
         const val MIN_RADIUS_METERS = 100.0
-        const val MAX_RADIUS_METERS = 5_000.0
+        const val MAX_RADIUS_METERS = 50_000.0
         const val DEFAULT_RADIUS_METERS = 200.0
     }
 }
@@ -30,6 +30,9 @@ data class Place(
 data class LocalNow(val date: Int, val minuteOfDay: Int)
 
 expect fun currentLocalNow(): LocalNow
+
+/** Epoch millis for a local date and time in the device's time zone. */
+expect fun epochMillisAt(local: LocalNow): Long
 
 /** Whether an arrival right now should notify, given the place's date range and daily hours. */
 fun Place.isActiveAt(now: LocalNow): Boolean {
@@ -45,6 +48,24 @@ fun Place.isActiveAt(now: LocalNow): Boolean {
         if (!inWindow) return false
     }
     return true
+}
+
+/**
+ * The next moment after [now] when the place becomes active, or null if it never will.
+ * Only meaningful when the place is not active at [now].
+ */
+fun Place.nextActivation(now: LocalNow): LocalNow? {
+    val hasHours = startMinute != null && endMinute != null && startMinute != endMinute
+    val today = Dates.toEpochDays(now.date)
+    for (offset in 0..366) {
+        val day = Dates.fromEpochDays(today + offset)
+        if (endDate != null && day > endDate) return null
+        if (startDate != null && day < startDate) continue
+        val minute = if (hasHours) startMinute!! else 0
+        if (offset == 0 && minute <= now.minuteOfDay) continue
+        return LocalNow(day, minute)
+    }
+    return null
 }
 
 /** True once the date range has ended, so there is no point watching the place any more. */

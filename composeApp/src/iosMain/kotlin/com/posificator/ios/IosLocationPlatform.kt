@@ -1,11 +1,19 @@
 package com.posificator.ios
 
 import com.posificator.data.PlaceRepository
+import com.posificator.arrival.ArrivalEffects
+import com.posificator.arrival.ArrivalEngine
+import com.posificator.arrival.GeofenceRegistrations
+import platform.CoreLocation.CLRegionState
+import platform.Foundation.NSDate
+import platform.Foundation.timeIntervalSince1970
+import platform.UserNotifications.UNNotificationTrigger
+import platform.UserNotifications.UNTimeIntervalNotificationTrigger
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 import com.posificator.model.Place
 import com.posificator.model.arrivalMessage
 import com.posificator.model.arrivalTitle
-import com.posificator.model.currentLocalNow
-import com.posificator.model.isActiveAt
 import com.posificator.platform.Coordinates
 import com.posificator.platform.LocationAccess
 import com.posificator.platform.LocationPlatform
@@ -63,6 +71,10 @@ class IosLocationPlatform(private val repository: PlaceRepository) : LocationPla
     // CLLocationManager holds its delegate weakly, so keep a strong reference here.
     private val delegate = LocationDelegate(this)
 
+    private val storage = UserDefaultsStorage()
+    private val registrations = GeofenceRegistrations(storage)
+    private val engine = ArrivalEngine(storage, repository, Effects())
+
     private var notificationStatus = UNAuthorizationStatusNotDetermined
     private var askedForAlways = false
     private var pendingLocation: CompletableDeferred<Coordinates?>? = null
@@ -104,6 +116,16 @@ class IosLocationPlatform(private val repository: PlaceRepository) : LocationPla
         }
     }
 
+    override suspend fun requestNotificationPermission(): Boolean = suspendCoroutine { cont ->
+        // Prompts only the first time; afterwards iOS just reports the current answer.
+        notificationCenter.requestAuthorizationWithOptions(UNAuthorizationOptionAlert or UNAuthorizationOptionSound) { granted, _ ->
+            refreshPermissions()
+            cont.resume(granted)
+        }
+    }
+
+    override fun openNotificationSettings() = openSettings()
+
     override fun refreshPermissions() {
         _permissions.value = readPermissions()
         notificationCenter.getNotificationSettingsWithCompletionHandler { settings ->
@@ -126,29 +148,31 @@ class IosLocationPlatform(private val repository: PlaceRepository) : LocationPla
 
     override suspend fun syncGeofences(places: List<Place>) = withContext(Dispatchers.Main) {
         val maxRadius = manager.maximumRegionMonitoringDistance
-        val wanted = places.take(MAX_REGIONS).associateBy { it.id }
-        val alreadyMonitored = mutableSetOf<String>()
+        val wanted = places.take(MAX_REGIONS)
+        val wantedIds = wanted.map { it.id }.toSet()
+        val diff = registrations.diff(wanted)
 
         manager.monitoredRegions.forEach { item ->
-            val region = item as? CLCircularRegion ?: return@forEach
-            val place = wanted[region.identifier]
-            if (place != null && region.matches(place, maxRadius)) {
-                alreadyMonitored += place.id
-            } else {
+            val region = item as? CLRegion ?: return@forEach
+            if (region.identifier !in wantedIds || region.identifier in diff.removed) {
                 manager.stopMonitoringForRegion(region)
+                engine.forget(region.identifier)
             }
         }
 
-        wanted.values.filterNot { it.id in alreadyMonitored }.forEach { place ->
+        diff.added.forEach { place ->
             val region = CLCircularRegion(
                 center = CLLocationCoordinate2DMake(place.latitude, place.longitude),
                 radius = place.radiusMeters.coerceAtMost(maxRadius),
                 identifier = place.id,
             )
             region.notifyOnEntry = true
-            region.notifyOnExit = false
+            region.notifyOnExit = true
             manager.startMonitoringForRegion(region)
+            // iOS doesn't report "enter" for a region the user is already in, so ask explicitly.
+            manager.requestStateForRegion(region)
         }
+        registrations.markRegistered(wanted)
     }
 
     internal fun onAuthorizationChanged() = refreshPermissions()
@@ -159,15 +183,33 @@ class IosLocationPlatform(private val repository: PlaceRepository) : LocationPla
         pendingLocation = null
     }
 
-    internal fun onEnteredRegion(identifier: String) {
-        val place = repository.find(identifier)?.takeIf { it.enabled && it.isActiveAt(currentLocalNow()) } ?: return
-        val content = UNMutableNotificationContent().apply {
-            setTitle(place.arrivalTitle())
-            setBody(place.arrivalMessage())
-            setSound(UNNotificationSound.defaultSound)
+    internal fun onEnteredRegion(identifier: String) = engine.onEnter(identifier)
+
+    internal fun onExitedRegion(identifier: String) = engine.onExit(identifier)
+
+    private inner class Effects : ArrivalEffects {
+        override fun notifyArrival(place: Place) = post("arrival-${place.id}", place, trigger = null)
+
+        // iOS can't wake the app at a given time, so the notification itself is scheduled for when the window opens.
+        override fun scheduleWindowStart(place: Place, epochMillis: Long) {
+            val seconds = (epochMillis - (NSDate().timeIntervalSince1970 * 1000).toLong()) / 1000.0
+            post(windowId(place.id), place, UNTimeIntervalNotificationTrigger.triggerWithTimeInterval(seconds.coerceAtLeast(1.0), repeats = false))
         }
-        val request = UNNotificationRequest.requestWithIdentifier("arrival-${place.id}", content, null)
-        notificationCenter.addNotificationRequest(request, null)
+
+        override fun cancelWindowStart(placeId: String) {
+            notificationCenter.removePendingNotificationRequestsWithIdentifiers(listOf(windowId(placeId)))
+        }
+
+        private fun windowId(placeId: String) = "window-$placeId"
+
+        private fun post(id: String, place: Place, trigger: UNNotificationTrigger?) {
+            val content = UNMutableNotificationContent().apply {
+                setTitle(place.arrivalTitle())
+                setBody(place.arrivalMessage())
+                setSound(UNNotificationSound.defaultSound)
+            }
+            notificationCenter.addNotificationRequest(UNNotificationRequest.requestWithIdentifier(id, content, trigger), null)
+        }
     }
 
     private fun readPermissions(): PermissionStatus {
@@ -186,11 +228,6 @@ class IosLocationPlatform(private val repository: PlaceRepository) : LocationPla
     private fun openSettings() {
         val url = NSURL.URLWithString(UIApplicationOpenSettingsURLString) ?: return
         UIApplication.sharedApplication.openURL(url, options = emptyMap<Any?, Any>(), completionHandler = null)
-    }
-
-    private fun CLCircularRegion.matches(place: Place, maxRadius: Double): Boolean {
-        val sameCenter = center.useContents { latitude == place.latitude && longitude == place.longitude }
-        return sameCenter && radius == place.radiusMeters.coerceAtMost(maxRadius)
     }
 
     companion object {
@@ -221,6 +258,19 @@ private class LocationDelegate(
     @ObjCSignatureOverride
     override fun locationManager(manager: CLLocationManager, didEnterRegion: CLRegion) {
         platform.onEnteredRegion(didEnterRegion.identifier)
+    }
+
+    @ObjCSignatureOverride
+    override fun locationManager(manager: CLLocationManager, didExitRegion: CLRegion) {
+        platform.onExitedRegion(didExitRegion.identifier)
+    }
+
+    override fun locationManager(manager: CLLocationManager, didDetermineState: CLRegionState, forRegion: CLRegion) {
+        when (didDetermineState) {
+            CLRegionState.CLRegionStateInside -> platform.onEnteredRegion(forRegion.identifier)
+            CLRegionState.CLRegionStateOutside -> platform.onExitedRegion(forRegion.identifier)
+            else -> Unit
+        }
     }
 
     override fun locationManager(manager: CLLocationManager, monitoringDidFailForRegion: CLRegion?, withError: NSError) {

@@ -30,6 +30,11 @@ interface LocationPlatform {
     /** Walks the user through the next missing permission, or opens system settings if it was denied. */
     fun requestPermissions()
 
+    /** Shows the system notification prompt if the OS still allows it; returns whether notifications are allowed. */
+    suspend fun requestNotificationPermission(): Boolean
+
+    fun openNotificationSettings()
+
     /** Re-reads permission state, e.g. after returning from system settings. */
     fun refreshPermissions()
 

@@ -1,6 +1,6 @@
 # Posificator
 
-Get a notification when you arrive at a saved place. Pick the place on a map, set its radius (100 m to 5 km), and optionally limit it to a date range and/or daily hours (overnight windows like 22:00–06:00 work).
+Get a notification when you arrive at a saved place. Pick the place on a map, set its radius (100 m to 50 km), and optionally limit it to a date range and/or daily hours (overnight windows like 22:00–06:00 work).
 
 Kotlin Multiplatform + Compose Multiplatform: one shared UI and data layer, with native geofencing on each platform behind the `LocationPlatform` interface.
 
@@ -51,7 +51,7 @@ Pick your signing team in the target's Signing settings, then run. The Xcode bui
 
 ## Notes
 
-- Saving a place while you're already inside it doesn't notify you; you get one on your next arrival.
+- Saving or editing a place while you're inside it notifies you right away (if its window is open). Each visit notifies once.
 - Both OSes batch location updates to save battery, so alerts can be delayed, and small radii are less reliable. That's why the minimum is 100 m.
-- Arriving outside a place's dates or hours doesn't notify, and staying inside won't notify later when the window opens; you need to leave and come back.
+- Arriving before a place's dates or hours start notifies you when the window opens, if you're still there.
 - Places whose date range has ended stop being watched.

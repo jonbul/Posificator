@@ -14,7 +14,7 @@ class BootReceiver : BroadcastReceiver() {
         val pending = goAsync()
         CoroutineScope(Dispatchers.Default).launch {
             try {
-                GeofenceRegistrar(context).syncSaved()
+                GeofenceRegistrar(context).reregisterAll()
             } finally {
                 pending.finish()
             }
