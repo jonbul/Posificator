@@ -141,6 +141,7 @@ fun PlaceEditorScreen(
     ) { padding ->
         BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
             val landscape = maxWidth > maxHeight
+            val portraitMapHeight = minOf(320.dp, maxHeight * 0.45f)
             // The map is rebuilt when the layout flips, so start it where the pin was.
             LaunchedEffect(landscape) {
                 center?.let {
@@ -243,7 +244,7 @@ fun PlaceEditorScreen(
                 }
             } else {
                 Column(Modifier.fillMaxSize()) {
-                    map(Modifier.fillMaxWidth().height(minOf(320.dp, maxHeight * 0.45f)))
+                    map(Modifier.fillMaxWidth().height(portraitMapHeight))
                     form(Modifier.weight(1f).fillMaxWidth())
                 }
             }
