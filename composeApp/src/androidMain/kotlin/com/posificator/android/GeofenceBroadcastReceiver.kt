@@ -7,6 +7,8 @@ import android.util.Log
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofenceStatusCodes
 import com.google.android.gms.location.GeofencingEvent
+import com.posificator.model.currentLocalNow
+import com.posificator.model.isActiveAt
 
 /** Receives geofence transitions from Google Play services and posts the arrival notification. */
 class GeofenceBroadcastReceiver : BroadcastReceiver() {
@@ -19,9 +21,10 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
         if (event.geofenceTransition != Geofence.GEOFENCE_TRANSITION_ENTER) return
 
         val repository = placeRepository(context)
+        val now = currentLocalNow()
         event.triggeringGeofences.orEmpty()
             .mapNotNull { repository.find(it.requestId) }
-            .filter { it.enabled }
+            .filter { it.enabled && it.isActiveAt(now) }
             .forEach { ArrivalNotifications.show(context, it) }
     }
 }

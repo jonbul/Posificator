@@ -37,6 +37,12 @@ targets:
           - "$(inherited)"
           - "-framework"
           - "ComposeApp"
+          - "-framework"
+          - "MapKit"
+          - "-framework"
+          - "CoreLocation"
+          - "-framework"
+          - "UserNotifications"
     preBuildScripts:
       - name: Compile Kotlin Framework
         basedOnDependencyAnalysis: false

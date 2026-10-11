@@ -4,6 +4,8 @@ import com.posificator.data.PlaceRepository
 import com.posificator.model.Place
 import com.posificator.model.arrivalMessage
 import com.posificator.model.arrivalTitle
+import com.posificator.model.currentLocalNow
+import com.posificator.model.isActiveAt
 import com.posificator.platform.Coordinates
 import com.posificator.platform.LocationAccess
 import com.posificator.platform.LocationPlatform
@@ -158,7 +160,7 @@ class IosLocationPlatform(private val repository: PlaceRepository) : LocationPla
     }
 
     internal fun onEnteredRegion(identifier: String) {
-        val place = repository.find(identifier)?.takeIf { it.enabled } ?: return
+        val place = repository.find(identifier)?.takeIf { it.enabled && it.isActiveAt(currentLocalNow()) } ?: return
         val content = UNMutableNotificationContent().apply {
             setTitle(place.arrivalTitle())
             setBody(place.arrivalMessage())

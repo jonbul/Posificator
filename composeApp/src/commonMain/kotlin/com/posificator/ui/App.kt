@@ -33,7 +33,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.posificator.data.PlaceRepository
+import com.posificator.model.Dates
 import com.posificator.model.Place
+import com.posificator.model.currentLocalNow
+import com.posificator.model.isExpiredAt
 import com.posificator.platform.LocationAccess
 import com.posificator.platform.LocationPlatform
 import com.posificator.platform.PermissionStatus
@@ -48,12 +51,15 @@ fun App(repository: PlaceRepository, platform: LocationPlatform) {
 
     // Keep the OS geofences in step with the saved places and permission changes.
     LaunchedEffect(repository, platform) {
-        combine(repository.places, platform.permissions) { all, _ -> all.filter { it.enabled } }
+        combine(repository.places, platform.permissions) { all, _ ->
+            val now = currentLocalNow()
+            all.filter { it.enabled && !it.isExpiredAt(now) }
+        }
             .collect { platform.syncGeofences(it) }
     }
 
     MaterialTheme {
-        Scaffold(
+        if (editing == null) Scaffold(
             topBar = { TopAppBar(title = { Text("Posificator") }) },
             floatingActionButton = {
                 ExtendedFloatingActionButton(
@@ -99,7 +105,7 @@ fun App(repository: PlaceRepository, platform: LocationPlatform) {
         }
 
         editing?.let { place ->
-            PlaceEditorDialog(
+            PlaceEditorScreen(
                 initial = place,
                 isNew = repository.find(place.id) == null,
                 platform = platform,
@@ -111,7 +117,7 @@ fun App(repository: PlaceRepository, platform: LocationPlatform) {
                     repository.delete(place.id)
                     editing = null
                 },
-                onDismiss = { editing = null },
+                onCancel = { editing = null },
             )
         }
     }
@@ -147,9 +153,22 @@ private fun PlaceRow(place: Place, onClick: () -> Unit, onToggle: (Boolean) -> U
                     "Within ${formatDistance(place.radiusMeters)} of ${formatCoordinate(place.latitude)}, ${formatCoordinate(place.longitude)}",
                     style = MaterialTheme.typography.bodySmall,
                 )
+                scheduleSummary(place)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
             Spacer(Modifier.width(12.dp))
             Switch(checked = place.enabled, onCheckedChange = onToggle)
         }
     }
+}
+
+private fun scheduleSummary(place: Place): String? {
+    val parts = buildList {
+        if (place.startMinute != null && place.endMinute != null) {
+            add("${Dates.formatMinute(place.startMinute)}–${Dates.formatMinute(place.endMinute)}")
+        }
+        if (place.startDate != null && place.endDate != null) {
+            add("${Dates.format(place.startDate)} to ${Dates.format(place.endDate)}")
+        }
+    }
+    return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
 }
