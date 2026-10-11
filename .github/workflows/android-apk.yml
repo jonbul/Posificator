@@ -1,0 +1,35 @@
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build debug APK
+        run: ./gradlew :composeApp:assembleDebug
+      - name: Rename APK
+        run: cp composeApp/build/outputs/apk/debug/composeApp-debug.apk posificator.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: posificator-apk
+          path: posificator.apk
+      # A release gives a plain download link you can open on the phone.
+      - name: Publish to the "latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest posificator.apk --title "Posificator (latest build)" --notes "Debug build of ${GITHUB_SHA::7}" --prerelease
