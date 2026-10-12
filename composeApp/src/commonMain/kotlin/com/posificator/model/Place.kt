@@ -17,6 +17,8 @@ data class Place(
     /** Optional daily window in minutes after midnight (both inclusive); may wrap past midnight. */
     val startMinute: Int? = null,
     val endMinute: Int? = null,
+    /** Optional days of the week the alarm works, 1 = Monday … 7 = Sunday. Null means every day. */
+    val weekdays: List<Int>? = null,
 ) {
     companion object {
         /** Both platforms are unreliable below ~100 m, so the slider starts there. */
@@ -38,6 +40,7 @@ expect fun epochMillisAt(local: LocalNow): Long
 fun Place.isActiveAt(now: LocalNow): Boolean {
     if (startDate != null && now.date < startDate) return false
     if (endDate != null && now.date > endDate) return false
+    var day = now.date
     if (startMinute != null && endMinute != null && startMinute != endMinute) {
         val m = now.minuteOfDay
         val inWindow = if (startMinute < endMinute) {
@@ -46,7 +49,10 @@ fun Place.isActiveAt(now: LocalNow): Boolean {
             m >= startMinute || m <= endMinute
         }
         if (!inWindow) return false
+        // The after-midnight part of an overnight window belongs to the day it started on.
+        if (startMinute > endMinute && m <= endMinute) day = Dates.addDays(day, -1)
     }
+    if (weekdays != null && Dates.dayOfWeek(day) !in weekdays) return false
     return true
 }
 
@@ -61,6 +67,7 @@ fun Place.nextActivation(now: LocalNow): LocalNow? {
         val day = Dates.fromEpochDays(today + offset)
         if (endDate != null && day > endDate) return null
         if (startDate != null && day < startDate) continue
+        if (weekdays != null && Dates.dayOfWeek(day) !in weekdays) continue
         val minute = if (hasHours) startMinute!! else 0
         if (offset == 0 && minute <= now.minuteOfDay) continue
         return LocalNow(day, minute)

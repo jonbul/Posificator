@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +21,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -57,7 +60,7 @@ import kotlin.math.roundToInt
 
 private enum class PickerTarget { StartDate, EndDate, StartTime, EndTime }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun PlaceEditorScreen(
     initial: Place,
@@ -85,6 +88,8 @@ fun PlaceEditorScreen(
     var useHours by remember { mutableStateOf(initial.startMinute != null && initial.endMinute != null) }
     var startMinute by remember { mutableIntStateOf(initial.startMinute ?: 8 * 60) }
     var endMinute by remember { mutableIntStateOf(initial.endMinute ?: 20 * 60) }
+    var useDays by remember { mutableStateOf(initial.weekdays != null) }
+    var days by remember { mutableStateOf(initial.weekdays?.toSet() ?: (1..7).toSet()) }
     var picker by remember { mutableStateOf<PickerTarget?>(null) }
 
     fun locate() {
@@ -109,7 +114,8 @@ fun PlaceEditorScreen(
 
     val radius = radiusText.trim().toDoubleOrNull()?.takeIf { it in Place.MIN_RADIUS_METERS..Place.MAX_RADIUS_METERS }
     val datesValid = !useDates || startDate <= endDate
-    val canSave = name.isNotBlank() && center != null && datesValid && radius != null
+    val daysValid = !useDays || days.isNotEmpty()
+    val canSave = name.isNotBlank() && center != null && datesValid && daysValid && radius != null
 
     Scaffold(
         topBar = {
@@ -131,6 +137,7 @@ fun PlaceEditorScreen(
                                     endDate = if (useDates) endDate else null,
                                     startMinute = if (useHours) startMinute else null,
                                     endMinute = if (useHours) endMinute else null,
+                                    weekdays = if (useDays) days.sorted() else null,
                                 ),
                             )
                         },
@@ -217,6 +224,23 @@ fun PlaceEditorScreen(
                         }
                         if (!datesValid) {
                             Text("The end date is before the start date.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+
+                    ToggleRow("Only on certain days of the week", useDays) { useDays = it }
+                    if (useDays) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Dates.WEEKDAY_SHORT_NAMES.forEachIndexed { index, label ->
+                                val day = index + 1
+                                FilterChip(
+                                    selected = day in days,
+                                    onClick = { days = if (day in days) days - day else days + day },
+                                    label = { Text(label) },
+                                )
+                            }
+                        }
+                        if (!daysValid) {
+                            Text("Pick at least one day.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                         }
                     }
 

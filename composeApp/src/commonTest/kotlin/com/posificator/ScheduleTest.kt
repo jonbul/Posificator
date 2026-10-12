@@ -5,6 +5,7 @@ import com.posificator.model.LocalNow
 import com.posificator.model.Place
 import com.posificator.model.isActiveAt
 import com.posificator.model.isExpiredAt
+import com.posificator.model.nextActivation
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -52,5 +53,22 @@ class ScheduleTest {
         assertEquals(20261011, Dates.fromUtcMillis(1_791_729_000_000L))
         assertEquals("2026-01-05", Dates.format(20260105))
         assertEquals("07:05", Dates.formatMinute(425))
+    }
+
+    @Test
+    fun weekdays() {
+        // 2026-10-12 is a Monday.
+        assertEquals(1, Dates.dayOfWeek(20261012))
+        assertEquals(7, Dates.dayOfWeek(20261011))
+        val weekdays = base.copy(weekdays = listOf(1, 2, 3, 4, 5))
+        assertTrue(weekdays.isActiveAt(at(20261012, 9)))
+        assertFalse(weekdays.isActiveAt(at(20261011, 9)))
+        assertEquals(LocalNow(20261012, 0), weekdays.nextActivation(at(20261010, 9)))
+
+        // Friday night 22:00–06:00 still counts at 02:00 on Saturday, but not on Friday at 02:00.
+        val fridayNight = base.copy(weekdays = listOf(5), startMinute = 22 * 60, endMinute = 6 * 60)
+        assertTrue(fridayNight.isActiveAt(at(20261017, 2)))
+        assertFalse(fridayNight.isActiveAt(at(20261016, 2)))
+        assertTrue(fridayNight.isActiveAt(at(20261016, 23)))
     }
 }

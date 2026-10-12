@@ -40,6 +40,13 @@ object Dates {
         return era * 146_097 + doe - 719_468
     }
 
+    fun addDays(date: Int, days: Int): Int = fromEpochDays(toEpochDays(date) + days)
+
+    /** 1 = Monday … 7 = Sunday. 1970-01-01 was a Thursday. */
+    fun dayOfWeek(date: Int): Int = (toEpochDays(date) + 3).mod(7) + 1
+
+    val WEEKDAY_SHORT_NAMES = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+
     fun format(date: Int): String =
         "${year(date)}-${month(date).toString().padStart(2, '0')}-${day(date).toString().padStart(2, '0')}"
 

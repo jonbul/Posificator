@@ -191,6 +191,9 @@ private fun scheduleSummary(place: Place): String? {
         if (place.startMinute != null && place.endMinute != null) {
             add("${Dates.formatMinute(place.startMinute)}–${Dates.formatMinute(place.endMinute)}")
         }
+        place.weekdays?.let { days ->
+            add(days.sorted().joinToString(" ") { Dates.WEEKDAY_SHORT_NAMES[it - 1] })
+        }
         if (place.startDate != null && place.endDate != null) {
             add("${Dates.format(place.startDate)} to ${Dates.format(place.endDate)}")
         }

@@ -1,6 +1,6 @@
 # Posificator
 
-Get a notification when you arrive at a saved place. Pick the place on a map, set its radius (100 m to 50 km), and optionally limit it to a date range and/or daily hours (overnight windows like 22:00–06:00 work).
+Get a notification when you arrive at a saved place. Pick the place on a map, set its radius (100 m to 50 km), and optionally limit it to a date range, days of the week and/or daily hours (overnight windows like 22:00–06:00 work).
 
 Kotlin Multiplatform + Compose Multiplatform: one shared UI and data layer, with native geofencing on each platform behind the `LocationPlatform` interface.
 
