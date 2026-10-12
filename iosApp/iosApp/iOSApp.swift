@@ -22,6 +22,19 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     ) {
         completionHandler([.banner, .list, .sound])
     }
+
+    // Tapping a notification opens the place's link, if it has one.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        if let link = response.notification.request.content.userInfo["link"] as? String,
+           let url = URL(string: link) {
+            UIApplication.shared.open(url)
+        }
+        completionHandler()
+    }
 }
 
 @main

@@ -14,6 +14,7 @@ import kotlin.coroutines.suspendCoroutine
 import com.posificator.model.Place
 import com.posificator.model.arrivalMessage
 import com.posificator.model.arrivalTitle
+import com.posificator.model.normalizedLink
 import com.posificator.platform.Coordinates
 import com.posificator.platform.LocationAccess
 import com.posificator.platform.LocationPlatform
@@ -207,6 +208,8 @@ class IosLocationPlatform(private val repository: PlaceRepository) : LocationPla
                 setTitle(place.arrivalTitle())
                 setBody(place.arrivalMessage())
                 setSound(UNNotificationSound.defaultSound)
+                // The Swift app delegate opens this when the notification is tapped.
+                place.normalizedLink()?.let { setUserInfo(mapOf("link" to it)) }
             }
             notificationCenter.addNotificationRequest(UNNotificationRequest.requestWithIdentifier(id, content, trigger), null)
         }

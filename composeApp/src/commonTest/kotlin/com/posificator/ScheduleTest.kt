@@ -6,6 +6,9 @@ import com.posificator.model.Place
 import com.posificator.model.isActiveAt
 import com.posificator.model.isExpiredAt
 import com.posificator.model.nextActivation
+import com.posificator.model.arrivalMessage
+import com.posificator.model.arrivalTitle
+import com.posificator.model.normalizedLink
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -70,5 +73,16 @@ class ScheduleTest {
         assertTrue(fridayNight.isActiveAt(at(20261017, 2)))
         assertFalse(fridayNight.isActiveAt(at(20261016, 2)))
         assertTrue(fridayNight.isActiveAt(at(20261016, 23)))
+    }
+
+    @Test
+    fun customMessageAndLink() {
+        assertEquals("You're now at Home.", base.arrivalMessage())
+        val custom = base.copy(message = "  Buy bread  ", link = "example.com/list")
+        assertEquals("Buy bread", custom.arrivalMessage())
+        assertEquals("Home", custom.arrivalTitle())
+        assertEquals("https://example.com/list", custom.normalizedLink())
+        assertEquals("http://x.org", base.copy(link = "http://x.org").normalizedLink())
+        assertEquals(null, base.copy(link = "  ").normalizedLink())
     }
 }

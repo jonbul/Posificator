@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import com.posificator.model.Dates
 import com.posificator.model.Place
 import com.posificator.model.currentLocalNow
+import com.posificator.model.normalizeLink
 import com.posificator.platform.Coordinates
 import com.posificator.platform.LocationPlatform
 import kotlinx.coroutines.launch
@@ -88,6 +89,8 @@ fun PlaceEditorScreen(
     var useHours by remember { mutableStateOf(initial.startMinute != null && initial.endMinute != null) }
     var startMinute by remember { mutableIntStateOf(initial.startMinute ?: 8 * 60) }
     var endMinute by remember { mutableIntStateOf(initial.endMinute ?: 20 * 60) }
+    var message by remember { mutableStateOf(initial.message.orEmpty()) }
+    var link by remember { mutableStateOf(initial.link.orEmpty()) }
     var useDays by remember { mutableStateOf(initial.weekdays != null) }
     var days by remember { mutableStateOf(initial.weekdays?.toSet() ?: (1..7).toSet()) }
     var picker by remember { mutableStateOf<PickerTarget?>(null) }
@@ -138,6 +141,8 @@ fun PlaceEditorScreen(
                                     startMinute = if (useHours) startMinute else null,
                                     endMinute = if (useHours) endMinute else null,
                                     weekdays = if (useDays) days.sorted() else null,
+                                    message = message.trim().takeIf { it.isNotEmpty() },
+                                    link = normalizeLink(link),
                                 ),
                             )
                         },
@@ -212,6 +217,25 @@ fun PlaceEditorScreen(
                             )
                         },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    OutlinedTextField(
+                        value = message,
+                        onValueChange = { message = it },
+                        label = { Text("Notification message (optional)") },
+                        placeholder = { Text("You're now at ${name.ifBlank { "this place" }}.") },
+                        minLines = 2,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = link,
+                        onValueChange = { link = it.trim() },
+                        label = { Text("Link (optional)") },
+                        placeholder = { Text("https://…") },
+                        supportingText = { Text("Opens when you tap the notification") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                         modifier = Modifier.fillMaxWidth(),
                     )
 

@@ -19,6 +19,10 @@ data class Place(
     val endMinute: Int? = null,
     /** Optional days of the week the alarm works, 1 = Monday … 7 = Sunday. Null means every day. */
     val weekdays: List<Int>? = null,
+    /** Optional text shown in the notification instead of the default one. */
+    val message: String? = null,
+    /** Optional web address opened when the notification is tapped. */
+    val link: String? = null,
 ) {
     companion object {
         /** Both platforms are unreliable below ~100 m, so the slider starts there. */
@@ -78,6 +82,16 @@ fun Place.nextActivation(now: LocalNow): LocalNow? {
 /** True once the date range has ended, so there is no point watching the place any more. */
 fun Place.isExpiredAt(now: LocalNow): Boolean = endDate != null && now.date > endDate
 
-fun Place.arrivalTitle(): String = "You've arrived"
+private val Place.customMessage get() = message?.trim()?.takeIf { it.isNotEmpty() }
 
-fun Place.arrivalMessage(): String = "You're now at $name."
+fun Place.arrivalTitle(): String = if (customMessage != null) name else "You've arrived"
+
+fun Place.arrivalMessage(): String = customMessage ?: "You're now at $name."
+
+/** The link with a scheme added if the user typed a bare address like "example.com". */
+fun Place.normalizedLink(): String? = normalizeLink(link)
+
+fun normalizeLink(raw: String?): String? {
+    val trimmed = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    return if (Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:").containsMatchIn(trimmed)) trimmed else "https://$trimmed"
+}

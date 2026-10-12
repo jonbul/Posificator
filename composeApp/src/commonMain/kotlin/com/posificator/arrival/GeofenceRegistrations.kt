@@ -30,7 +30,7 @@ class GeofenceRegistrations(private val storage: KeyValueStorage) {
 
     /** Any edit to a place (location, radius or schedule) re-registers it, so saving a place you're in notifies. */
     private fun signature(place: Place) =
-        listOf(place.latitude, place.longitude, place.radiusMeters, place.startDate, place.endDate, place.startMinute, place.endMinute, place.weekdays)
+        listOf(place.latitude, place.longitude, place.radiusMeters, place.startDate, place.endDate, place.startMinute, place.endMinute, place.weekdays, place.message, place.link)
             .joinToString("|")
 
     private fun load(): Map<String, String> =

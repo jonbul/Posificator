@@ -6,10 +6,12 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import com.posificator.model.Place
 import com.posificator.model.arrivalMessage
 import com.posificator.model.arrivalTitle
+import com.posificator.model.normalizedLink
 
 object ArrivalNotifications {
     private const val CHANNEL_ID = "arrivals"
@@ -30,10 +32,14 @@ object ArrivalNotifications {
             Notification.Builder(context).setPriority(Notification.PRIORITY_HIGH)
         }
 
-        val openApp = PendingIntent.getActivity(
+        // Tapping opens the place's link if it has one, otherwise the app.
+        val tapIntent = place.normalizedLink()
+            ?.let { Intent(Intent.ACTION_VIEW, Uri.parse(it)) }
+            ?: Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        val onTap = PendingIntent.getActivity(
             context,
-            0,
-            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            place.id.hashCode(),
+            tapIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
 
@@ -41,7 +47,8 @@ object ArrivalNotifications {
             .setSmallIcon(android.R.drawable.ic_dialog_map)
             .setContentTitle(place.arrivalTitle())
             .setContentText(place.arrivalMessage())
-            .setContentIntent(openApp)
+            .setStyle(Notification.BigTextStyle().bigText(place.arrivalMessage()))
+            .setContentIntent(onTap)
             .setAutoCancel(true)
             .build()
 
