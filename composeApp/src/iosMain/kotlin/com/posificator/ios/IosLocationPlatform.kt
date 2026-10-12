@@ -7,6 +7,7 @@ import com.posificator.arrival.GeofenceRegistrations
 import platform.CoreLocation.CLRegionState
 import platform.Foundation.NSDate
 import platform.Foundation.timeIntervalSince1970
+import platform.UserNotifications.UNNotificationInterruptionLevel
 import platform.UserNotifications.UNNotificationTrigger
 import platform.UserNotifications.UNTimeIntervalNotificationTrigger
 import kotlin.coroutines.resume
@@ -208,6 +209,8 @@ class IosLocationPlatform(private val repository: PlaceRepository) : LocationPla
                 setTitle(place.arrivalTitle())
                 setBody(place.arrivalMessage())
                 setSound(UNNotificationSound.defaultSound)
+                // A true looping alarm needs Apple's critical-alerts entitlement; time-sensitive at least breaks through Focus.
+                if (place.alarm) setInterruptionLevel(UNNotificationInterruptionLevel.UNNotificationInterruptionLevelTimeSensitive)
                 // The Swift app delegate opens this when the notification is tapped.
                 place.normalizedLink()?.let { setUserInfo(mapOf("link" to it)) }
             }

@@ -24,6 +24,11 @@ targets:
         CADisableMinimumFrameDurationOnPhone: true
         NSLocationWhenInUseUsageDescription: Posificator uses your location to fill in a place's coordinates and to tell you when you arrive.
         NSLocationAlwaysAndWhenInUseUsageDescription: Posificator needs location access all the time to notify you when you arrive at a saved place, even when the app is closed.
+    entitlements:
+      path: iosApp/iosApp.entitlements
+      properties:
+        # Lets alarm places break through Focus modes.
+        com.apple.developer.usernotifications.time-sensitive: true
     settings:
       base:
         PRODUCT_NAME: Posificator

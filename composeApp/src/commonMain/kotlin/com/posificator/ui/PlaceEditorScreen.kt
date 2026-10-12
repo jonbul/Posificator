@@ -91,6 +91,7 @@ fun PlaceEditorScreen(
     var endMinute by remember { mutableIntStateOf(initial.endMinute ?: 20 * 60) }
     var message by remember { mutableStateOf(initial.message.orEmpty()) }
     var link by remember { mutableStateOf(initial.link.orEmpty()) }
+    var alarm by remember { mutableStateOf(initial.alarm) }
     var useDays by remember { mutableStateOf(initial.weekdays != null) }
     var days by remember { mutableStateOf(initial.weekdays?.toSet() ?: (1..7).toSet()) }
     var picker by remember { mutableStateOf<PickerTarget?>(null) }
@@ -143,6 +144,7 @@ fun PlaceEditorScreen(
                                     weekdays = if (useDays) days.sorted() else null,
                                     message = message.trim().takeIf { it.isNotEmpty() },
                                     link = normalizeLink(link),
+                                    alarm = alarm,
                                 ),
                             )
                         },
@@ -238,6 +240,14 @@ fun PlaceEditorScreen(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                         modifier = Modifier.fillMaxWidth(),
                     )
+
+                    ToggleRow("Ring an alarm", alarm) { alarm = it }
+                    if (alarm) {
+                        Text(
+                            "Plays your alarm sound until you tap, swipe away or stop the notification.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
 
                     HorizontalDivider()
                     ToggleRow("Only between certain dates", useDates) { useDates = it }

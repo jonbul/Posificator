@@ -34,6 +34,10 @@
             android:exported="false" />
 
         <receiver
+            android:name=".android.StopAlarmReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".android.WindowStartReceiver"
             android:exported="false" />
 

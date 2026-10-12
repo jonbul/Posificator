@@ -23,6 +23,8 @@ data class Place(
     val message: String? = null,
     /** Optional web address opened when the notification is tapped. */
     val link: String? = null,
+    /** Ring with the phone's alarm sound until dismissed, instead of a normal notification. */
+    val alarm: Boolean = false,
 ) {
     companion object {
         /** Both platforms are unreliable below ~100 m, so the slider starts there. */

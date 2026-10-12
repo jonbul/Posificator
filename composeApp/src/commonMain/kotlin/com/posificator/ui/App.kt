@@ -188,6 +188,7 @@ private fun PlaceRow(place: Place, onClick: () -> Unit, onToggle: (Boolean) -> U
 
 private fun scheduleSummary(place: Place): String? {
     val parts = buildList {
+        if (place.alarm) add("Alarm")
         if (place.startMinute != null && place.endMinute != null) {
             add("${Dates.formatMinute(place.startMinute)}–${Dates.formatMinute(place.endMinute)}")
         }
